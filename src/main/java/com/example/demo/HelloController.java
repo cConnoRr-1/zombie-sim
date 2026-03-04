@@ -72,7 +72,23 @@ public class HelloController {
     }
     @FXML
     public void handleSetBomb(){
-
+        // Clear all people from grid and list
+        for (Person a : people) {
+            gameGrid[a.getOrgLoc().getX()][a.getOrgLoc().getY()] = 0;
+        }
+        people.clear();
+        // Clear all zombies from grid and list
+        for (Zombies z : zHorde) {
+            gameGrid[z.getOrgLoc().getX()][z.getOrgLoc().getY()] = 0;
+        }
+        zHorde.clear();
+        // Clear people inside buildings
+        for (Building b : buildings) {
+            b.getPeopleInBuilding().clear();
+        }
+        infected = 0;
+        updateScreen();
+        updateInfo();
     }
     XYChart.Series<String, Number> series = new XYChart.Series<>();
     @FXML
@@ -496,7 +512,7 @@ public class HelloController {
 
                     }
                 }
-                //change to adult
+                // Zombies in buildings: leave when stay time up, or try to infect (throttled to once per second)
                 for (int i = 0; i<zHorde.size(); i++){
                     if(zHorde.get(i).getEnteredBuilding() == true && zHorde.get(i).getGoToBuild() != null) {
                         if (now - zHorde.get(i).getStayTime() > zHorde.get(i).getGoToBuild().getStayTime()){
@@ -508,10 +524,19 @@ public class HelloController {
                             zHorde.get(i).changeIdentVisual(gameGrid);
 
                         }else {
+                            // Only infect if person still in people list (prevents same person infected by multiple zombies in one frame)
                             if (decideIfHappens(5)) {
-                                for (int j = 0; j < (zHorde.get(i).getGoToBuild().getPeopleInBuilding().size() / 2); j++) {
-                                    zHorde.get(i).infectPerson(zHorde, zHorde.get(i).getGoToBuild().getPeopleInBuilding().get(0));
-                                    zHorde.get(i).getGoToBuild().removePfromB(zHorde.get(i).getGoToBuild().getPeopleInBuilding().get(0));
+                                ArrayList<Person> inBuilding = zHorde.get(i).getGoToBuild().getPeopleInBuilding();
+                                if (!inBuilding.isEmpty()) {
+                                    Person p = inBuilding.get(0);
+                                    if (people.contains(p)) {
+                                        zHorde.get(i).infectPerson(zHorde, p);
+                                        Zombies newZombie = zHorde.get(zHorde.size() - 1);
+                                        gameGrid[newZombie.getOrgLoc().getX()][newZombie.getOrgLoc().getY()] = newZombie.getIdentity();
+                                        people.remove(p);
+                                        zHorde.get(i).getGoToBuild().removePfromB(p);
+                                        infected++;
+                                    }
                                 }
                             }
                         }
@@ -519,11 +544,15 @@ public class HelloController {
                 }
                 for (int i = 0; i< zHorde.size(); i++) {
                     if (zHorde.get(i).checkNeighborPerson(people, gameGrid, 1) && decideIfHappens(5)) {
-                        gameGrid[zHorde.get(i).personEaten().getOrgLoc().getX()][zHorde.get(i).personEaten().getOrgLoc().getY()]=0;
-                        zHorde.get(i).infectPerson(zHorde, zHorde.get(i).personEaten());
+                        Person eaten = zHorde.get(i).personEaten();
+                        // Only infect if still in people list - prevents multiple zombies infecting same person in one frame
+                        if (!people.contains(eaten)) continue;
+                        gameGrid[eaten.getOrgLoc().getX()][eaten.getOrgLoc().getY()] = 0;
+                        zHorde.get(i).infectPerson(zHorde, eaten);
+                        Zombies newZombie = zHorde.get(zHorde.size() - 1);
+                        gameGrid[newZombie.getOrgLoc().getX()][newZombie.getOrgLoc().getY()] = newZombie.getIdentity();
+                        people.remove(eaten);
                         infected++;
-                        people.remove(zHorde.get(i).personEaten());
-                        System.out.println(zHorde.size());
                         zHorde.get(i).resetFightTime();
                     }
                     for (int j = 0; j< buildings.size(); j++){
